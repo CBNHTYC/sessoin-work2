@@ -68,13 +68,14 @@ def GetUser(user):
     user = {
         'id': userId,
         'userPhone' : userPhone,
-        'operator' : operator
+        'operator' : operator,
+	    'groups' : ''
         }
     return user
 
 def WriteCSVFileOfUsers(name, user, create):
         if create is True:
-            data = ["ID;phone;operator".split(";")]
+            data = ["ID;phone;operator;groups".split(";")]
             with open(name,'w', encoding="utf-8") as file:
                 writer = csv.writer(file, delimiter=';')
                 for line in data:
@@ -82,7 +83,7 @@ def WriteCSVFileOfUsers(name, user, create):
         else:    
             with open(name,'a', encoding="utf-8") as file:
                 writer = csv.writer(file, delimiter=';') 
-                writer.writerow((user['id'], user['userPhone'], user['operator']))
+                writer.writerow((user['id'], user['userPhone'], user['operator'], user['groups']))
                 
 def getListOfMembers(idOfGroup): #возвращает не более 25 000 человек за раз. Параметр - строковая переменная. 
     r = requests.post('https://api.vk.com/method/execute.getListOfUsersInGroup?idGroup='+idOfGroup+'&access_token='+token+'&v='+'5.83')
@@ -187,22 +188,23 @@ def getGroupsOfUsersTwo(listOfUsers):
                     listOfUsersGroups.append(list(tmpList))
                 except:
                     listOfUsersGroups.append(list())
-    print(listOfUsersGroups[0])
-                
+    return listOfUsersGroups
             
 
 def main():                
     WriteCSVFileOfUsers('users.csv', 'Empty', True)
-    listOfMembersID = getListOfMembers('53548055')
+    listOfMembersID = getListOfMembers('29270122')
     listOfUsers = getInfoOfUsers(listOfMembersID)
-    t = 1
-    for user in listOfUsers:
-        DataOfUser = GetUser(user)
+    listOdUsersGroups = getGroupsOfUsersTwo(listOfMembersID)
+
+    for i in range(len(listOfUsers)):
+        DataOfUser = GetUser(listOfUsers[i])
+        DataOfUser['groups'] = listOdUsersGroups[i]
         WriteCSVFileOfUsers('users.csv', DataOfUser, False)
     getGroupsOfUsersTwo(listOfMembersID)
 
 main()
 
-        
+#53548055
     
    
