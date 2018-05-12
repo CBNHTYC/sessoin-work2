@@ -29,6 +29,10 @@ officialGroups = {
     'мтс': 8458649, 'билайн': 26514504, 'теле2': 18098621, 'мегафон': 3785
 }
 
+isSetGroupOperator = {
+    'мтс' : 0, 'билайн': 0,
+    'теле2': 0, 'мегафон': 0
+}
 
 def req ():
     global requestTime
@@ -63,14 +67,15 @@ def GetUser (user):
 
     operator = getOperatorOfUser(userPhone)
     user = {
-        'id': userId, 'userPhone': userPhone, 'operator': operator, 'groups': ''
+        'id': userId, 'userPhone': userPhone, 'operator': operator, 'groups': '', 'lTele2' : '', 'lMTS' : '',
+        'lMegafon' : '', 'lBeeline' : '', 'rTele2' : '', 'rMTS' : '', 'rMegafon' : '', 'rBeeline' : ''
     }
     return user
 
 
 def WriteCSVFileOfUsers (name, user, create):
     if create is True:
-        data = ["ID;phone;operator;groups".split(";")]
+        data = ["ID;phone;operator;groups;lTele2;rTele2;lMTS;rMTS;lMegafon;rMegafon;lBeeline;rBeeline".split(";")]
         with open(name, 'w', encoding = "utf-8") as file:
             writer = csv.writer(file, delimiter = ';')
             for line in data:
@@ -78,18 +83,10 @@ def WriteCSVFileOfUsers (name, user, create):
     else:
         with open(name, 'a', encoding = "utf-8") as file:
             writer = csv.writer(file, delimiter = ';')
-            writer.writerow((user['id'], user['userPhone'], user['operator'], user['groups']))
+            writer.writerow((user['id'], user['userPhone'], user['operator'], user['groups'], user['lTele2'], user['rTele2'], user['lMTS'], user['rMTS'], user['lMegafon'], user['rMegafon'], user['lBeeline'], user['rBeeline']))
 
 
-def getListOfMembers (idOfGroup):  # возвращает не более 25 000 человек за раз. Параметр - строковая переменная.
-    '''
-    r = requests.post('https://api.vk.com/method/execute.getListOfUsersInGroup?idGroup='+idOfGroup+'&access_token='+token+'&v='+'5.83')
-    req()
-
-    a = r.json()
-    print(a)
-    b = a['response']
-    '''
+def getListOfMembers (idOfGroup):
     offset = 0
     request = api.execute.getListOfUsersInGroup(idGroup = idOfGroup, offset = offset, v = 5.73, timeout = 30)
     req()
@@ -147,8 +144,8 @@ def getInfoOfUsers (listOfUsers):
             tempListOfUsers = api.users.get(user_ids = localStrOfUsers, fields = 'contacts', v = 5.83, timeout = 30)
             req()
 
-            for user in tempListOfUsers:
-                localListOfUsers.append(copy.deepcopy(user))
+            for user1 in tempListOfUsers:
+                localListOfUsers.append(copy.deepcopy(user1))
             time.sleep(0.35)
             totalCount -= count
             count = 0
@@ -157,7 +154,7 @@ def getInfoOfUsers (listOfUsers):
 
 
 def getGroupsOfUser (userID):
-    global officialGroups
+    global officialGroups, isSetGroupOperator
     localOffset = 0
     result = api.execute.getGroups(idUser = userID, offset = localOffset, v = 5.74, timeout = 30)
     req()
@@ -174,34 +171,36 @@ def getGroupsOfUser (userID):
         for group in result['groups']:
             for oGroup in officialGroups:
                 if str(group) == str(officialGroups[oGroup]):
+                    isSetGroupOperator[oGroup] = 1
                     listOfGroups.append(oGroup + ' ' + str(group) + ';')
     return listOfGroups
 
 
 def getGroupsOfUsersTwo (listOfUsers):
-    global officialGroups
+    global officialGroups, isSetGroupOperator
     strOfIDs = ''
     listOfUsersGroups = []
-    t = 1
     for i in range(len(listOfUsers)):
-        listOfUsersGroups.append(list())
         strOfIDs += str(listOfUsers[i])
-        if ((i + 1) % 24) and (i != (len(listOfUsers) - 1)):
+        if ((i + 1) % 25) and (i != (len(listOfUsers) - 1)):
             strOfIDs += ','
-        if (not (i + 1) % 24) or (i == (len(listOfUsers) - 1)):
-            query = api.execute.getGroupsTwo(strOfUsers = strOfIDs, v = 5.74, timeout = 30)
+        if (not (i + 1) % 25) or (i == (len(listOfUsers) - 1)):
+            request = api.execute.getGroupsTwo(strOfUsers = strOfIDs, v = 5.74, timeout = 30)
             req()
             strOfIDs = ''
-            result = query['list']
-            if t == 1:
-                t = 2
+            result = request['list']
             for usersGroups in result:
                 try:
                     tmpList = []
+                    first = True
                     for group in usersGroups:
                         for offGroup in officialGroups:
                             if group == officialGroups[offGroup]:
-                                tmpList.append(offGroup + ' ' + str(group) + ';')
+                                if first:
+                                    tmpList.append(str(usersGroups[0]))
+                                    first = False
+                                isSetGroupOperator[offGroup] = 1
+                                tmpList.append(str(offGroup))
                     listOfUsersGroups.append(list(tmpList))
                 except:
                     listOfUsersGroups.append(list())
@@ -210,7 +209,8 @@ def getGroupsOfUsersTwo (listOfUsers):
 
 def getWall (ID, offset):
     try:
-        return api.wall.get(ogroupID = ID, offset = offset, v = 5.74)
+        return api.execute.getWall(groupID = ID, offset = offset, v = 5.74, timeout = 30)
+
     except Exception as e:
         print(str(e))
         print(';;;')
@@ -218,34 +218,149 @@ def getWall (ID, offset):
         return error
 
 
-def getListOfPosts (GROUP, timeRange):
+def getListOfPosts (ID, timeRange):
     offset = 0
     listOfPosts = []
-
-    while True:
-        wall = getWall(GROUP, offset)
+    boo = True
+    while boo:
+        wall = getWall(ID, offset)
         req()
         if wall != 'error':
-            for post in wall:
-                if int(post['date']) < timeRange:
-                    break
-                else:
-                    listOfPosts.append(post)
-        offset += 2500
-
+                for i in range(len(wall)):
+                    if int(wall[i]['date']) < int(timeRange) and i != 0:
+                        boo = False
+                        break
+                    else:
+                        listOfPosts.append(copy.deepcopy(wall[i]))
+                offset += 2500
+        else:
+            print('error in getListOfPosts')
+            break
     return listOfPosts
+
+def getLikesOfPost (ID, listOfPosts):
+    listOfLikers = []
+    strOfIDs = ''
+    for i in range (len(listOfPosts)):
+        strOfIDs += str(listOfPosts[i]['id'])
+        if ((i + 1) % 25) and (i != (len(listOfPosts) - 1)):
+            strOfIDs += ','
+        if (not (i + 1) % 25) or (i == (len(listOfPosts) - 1)):
+            request = api.execute.getLikersOfPost(ownerID = ID, itemIDs = strOfIDs, v = 5.74, timeout = 30)
+            req()
+            strOfIDs = ''
+            for lst in request:
+                tempLst = []
+                for id in lst['items']:
+                    tempLst.append(str(id))
+                listOfLikers.append(list(tempLst))
+    return listOfLikers
+
+def getRepostsOfPost (ID, listOfPosts):
+    listOfLikers = []
+    strOfIDs = ''
+    for i in range(len(listOfPosts)):
+        strOfIDs += str(listOfPosts[i]['id'])
+        if ((i + 1) % 25) and (i != (len(listOfPosts) - 1)):
+            strOfIDs += ','
+        if (not (i + 1) % 25) or (i == (len(listOfPosts) - 1)):
+            request = api.execute.getRepostersOfPost(ownerID = ID, itemIDs = strOfIDs, v = 5.74, timeout = 30)
+            req()
+            strOfIDs = ''
+            for lst in request:
+                tempLst = []
+                for id in lst['items']:
+                    tempLst.append(str(id))
+                listOfLikers.append(list(tempLst))
+    return listOfLikers
+
+def countOfLikesAndReposts (userID, ListOfLikers, listOfReposters):
+    likes = 0
+    reposts = 0
+    for lst in ListOfLikers:
+        for id in lst:
+            if id == userID:
+                likes += 1
+    if likes > 0:
+        for lst in listOfReposters:
+            for id in lst:
+                if id == userID:
+                    reposts += 1
+
+    response = {'likes' : likes, 'reposts' : reposts}
+    return response
+
 
 
 def main ():
+    global isSetGroupOperator
+
     WriteCSVFileOfUsers('users.csv', 'Empty', True)
-    listOfMembersID = getListOfMembers('33025155')
+    listOfMembersID = getListOfMembers('53548055')
     listOfUsers = getInfoOfUsers(listOfMembersID)
-    listOdUsersGroups = getGroupsOfUsersTwo(listOfMembersID)
+    listOdUsersGroups = getGroupsOfUsersTwo(listOfMembersID) #определение isSetGroupOperator происходит здесь
+
+    if isSetGroupOperator['теле2']:
+        listOfPostsT2 = getListOfPosts(-18098621, 1524245807)
+        listOfLikersT2 = getLikesOfPost(-18098621, listOfPostsT2)
+        listOfRepostersT2 = getRepostsOfPost(-18098621, listOfPostsT2)
+    if isSetGroupOperator['билайн']:
+        listOfPostsBee = getListOfPosts(-26514504, 1524245807)
+        listOfLikersBee = getLikesOfPost(-26514504, listOfPostsBee)
+        listOfRepostersBee = getRepostsOfPost(-26514504, listOfPostsBee)
+    if isSetGroupOperator['мтс']:
+        listOfPostsMTS = getListOfPosts(-8458649, 1524245807)
+        listOfLikersMTS = getLikesOfPost(-8458649, listOfPostsMTS)
+        listOfRepostersMTS = getRepostsOfPost(-8458649, listOfPostsMTS)
+    if isSetGroupOperator['мегафон']:
+        listOfPostsMega = getListOfPosts(-3785, 1524245807)
+        listOfLikersMega = getLikesOfPost(-3785, listOfPostsMega)
+        listOfRepostersMega = getRepostsOfPost(-3785, listOfPostsMega)
+
+    #print(listOdUsersGroups)
+    #print("----")
+    #for i in listOdUsersGroups:
+        #print(i)
 
     for i in range(len(listOfUsers)):
         DataOfUser = GetUser(listOfUsers[i])
-        DataOfUser['groups'] = listOdUsersGroups[i]
+
+        for lst in listOdUsersGroups:
+            if lst:
+                if lst[0] == DataOfUser['id']:
+                    DataOfUser['groups'] = lst[1:len(lst):1]
+                    print (DataOfUser['groups'])
+                    break
+        if DataOfUser['groups']:
+            for oper in DataOfUser['groups']:
+                if oper == 'теле2':
+                    lstOfLikers = listOfLikersT2
+                    lstOfReposters = listOfRepostersT2
+                    lOper = 'lTele2'
+                    rOper = 'rTele2'
+                if oper == 'мтс':
+                    lstOfLikers = listOfLikersMTS
+                    lstOfReposters = listOfRepostersMTS
+                    lOper = 'lMTS'
+                    rOper = 'rMTS'
+                if oper == 'мегафон':
+                    lstOfLikers = listOfLikersMega
+                    lstOfReposters = listOfRepostersMega
+                    lOper = 'lMegafon'
+                    rOper = 'rMegafon'
+                if oper == 'билайн':
+                    lstOfLikers = listOfLikersBee
+                    lstOfReposters = listOfRepostersBee
+                    lOper = 'lBeeline'
+                    rOper = 'rBeeline'
+                likes = countOfLikesAndReposts(DataOfUser['id'],lstOfLikers,lstOfReposters)['likes']
+                reposts = countOfLikesAndReposts(DataOfUser['id'],lstOfLikers,lstOfReposters)['reposts']
+                DataOfUser[lOper] = likes
+                DataOfUser[rOper] = reposts
+
+
         WriteCSVFileOfUsers('users.csv', DataOfUser, False)
+
     getGroupsOfUsersTwo(listOfMembersID)
 
 
@@ -253,3 +368,6 @@ main()
 
 # 29270122
 # 53548055
+# 33025155
+#10 мая 2018  1525954425
+#20 apr 2018  1524245807
