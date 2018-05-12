@@ -188,7 +188,7 @@ def getGroupsOfUsersTwo (listOfUsers):
         strOfIDs += str(listOfUsers[i])
         if ((i + 1) % 24) and (i != (len(listOfUsers) - 1)):
             strOfIDs += ','
-        if (not (i + 1) % 24) or (i = (len(listOfUsers) - 1)):
+        if (not (i + 1) % 24) or (i == (len(listOfUsers) - 1)):
             query = api.execute.getGroupsTwo(strOfUsers = strOfIDs, v = 5.74, timeout = 30)
             req()
             strOfIDs = ''
