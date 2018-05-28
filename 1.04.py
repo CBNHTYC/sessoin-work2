@@ -1,16 +1,16 @@
-import vk
-import requests
-import json
 import time
 import copy
 import csv
+import datetime
+import pickle
+
+import login
 
 # 53548055
 
-token = '9e74e23a1042a17048a7fe3296cf3b0de33b840ebfdce86c35c4a07e113131dc621681630339610f30375'
-session = vk.Session(access_token = token)
-api = vk.API(session)
-requestTime = 0;
+api = login.api
+
+requestTime = 0
 
 
 class User:
@@ -90,10 +90,33 @@ def WriteCSVFileOfUsers (name, user, create):
 			writer = csv.writer(file, delimiter = ';')
 			writer.writerow((user['id'], user['userPhone'], user['operator'], user['groups'], user['lTele2'], user['rTele2'], user['lMTS'], user['rMTS'], user['lMegafon'], user['rMegafon'], user['lBeeline'], user['rBeeline'], user['fTele2'], user['fMTS'], user['fMegafon'], user['fBeeline']))
 
+def writeCSVFileOfAnalysisUsers (name, user, create):
+	if create is True:
+		data = ["ID;PageRank;groups;Friends".split(";")]
+		with open(name, 'w', encoding = "utf-8") as file:
+			writer = csv.writer(file, delimiter = ';')
+			for line in data:
+				writer.writerow((line))
+	else:
+		with open(name, 'a', encoding = "utf-8") as file:
+			writer = csv.writer(file, delimiter = ';')
+			writer.writerow((user['id'], user['PageRank'], user['groups'], user['friends']))
+
+def writeCSVFileOfAnalysisFriends (name, user, create):
+	if create is True:
+		data = ["owner;ID;PageRank;groups".split(";")]
+		with open(name, 'w', encoding = "utf-8") as file:
+			writer = csv.writer(file, delimiter = ';')
+			for line in data:
+				writer.writerow((line))
+	else:
+		with open(name, 'a', encoding = "utf-8") as file:
+			writer = csv.writer(file, delimiter = ';')
+			writer.writerow((user['owner'], user['id'], user['PageRank'], user['groups']))
 
 def getListOfMembers (idOfGroup):
 	offset = 0
-	request = api.execute.getListOfUsersInGroup(idGroup = idOfGroup, offset = offset, v = 5.73, timeout = 30)
+	request = api.execute.getListOfUsersInGroup(idGroup = idOfGroup, offset = offset, v = 5.73, timeout = 120)
 	req()
 	b = request['users']
 	listOfMembers = []
@@ -102,7 +125,7 @@ def getListOfMembers (idOfGroup):
 
 	while request['overCount']:
 		offset += 25000
-		request = api.execute.getListOfUsersInGroup(idGroup = idOfGroup, offset = offset, v = 5.73, timeout = 30)
+		request = api.execute.getListOfUsersInGroup(idGroup = idOfGroup, offset = offset, v = 5.73, timeout = 120)
 		req()
 		b = request['users']
 		for i in b:
@@ -146,7 +169,7 @@ def getInfoOfUsers (listOfUsers):
 			localStrOfUsers = localStrOfUsers + ','
 		else:
 			# print(localStrOfUsers)
-			tempListOfUsers = api.users.get(user_ids = localStrOfUsers, fields = 'contacts', v = 5.83, timeout = 30)
+			tempListOfUsers = api.users.get(user_ids = localStrOfUsers, fields = 'contacts', v = 5.83, timeout = 120)
 			req()
 
 			for user1 in tempListOfUsers:
@@ -161,7 +184,7 @@ def getInfoOfUsers (listOfUsers):
 def getGroupsOfUser (userID):
 	global officialGroups, isSetGroupOperator
 	localOffset = 0
-	result = api.execute.getGroups(idUser = userID, offset = localOffset, v = 5.74, timeout = 30)
+	result = api.execute.getGroups(idUser = userID, offset = localOffset, v = 5.74, timeout = 120)
 	req()
 	listOfGroups = []
 	for group in result['groups']:
@@ -171,7 +194,7 @@ def getGroupsOfUser (userID):
 
 	while result['overCount'] > 0:
 		localOffset += 25000
-		result = api.execute.getGroups(idUser = userID, offset = localOffset, v = 5.74, timeout = 30)
+		result = api.execute.getGroups(idUser = userID, offset = localOffset, v = 5.74, timeout = 120)
 		req()
 		for group in result['groups']:
 			for oGroup in officialGroups:
@@ -202,8 +225,15 @@ def getGroupsOfUsersTwo (listOfUsers):
 		if ((i + 1) % 25) and (i != (len(listOfUsers) - 1)):
 			strOfIDs += ','
 		if (not (i + 1) % 25) or (i == (len(listOfUsers) - 1)):
-			request = api.execute.getGroupsTwo(strOfUsers = strOfIDs, v = 5.74, timeout = 30)
-			req()
+			while True:
+				try:
+					request = api.execute.getGroupsTwo(strOfUsers = strOfIDs, v = 5.74, timeout = 120)
+					req()
+					break
+				except Exception as e:
+					print(e)
+					continue
+
 			strOfIDs = ''
 			result = request['list']
 
@@ -235,7 +265,7 @@ def getGroupsOfUsersTwo (listOfUsers):
 
 def getWall (ID, offset):
 	try:
-		return api.execute.getWall(groupID = ID, offset = offset, v = 5.74, timeout = 30)
+		return api.execute.getWall(groupID = ID, offset = offset, v = 5.74, timeout = 120)
 
 	except Exception as e:
 		print(str(e))
@@ -272,7 +302,7 @@ def getLikesOfPost (ID, listOfPosts):
 		if ((i + 1) % 25) and (i != (len(listOfPosts) - 1)):
 			strOfIDs += ','
 		if (not (i + 1) % 25) or (i == (len(listOfPosts) - 1)):
-			request = api.execute.getLikersOfPost(ownerID = ID, itemIDs = strOfIDs, v = 5.74, timeout = 30)
+			request = api.execute.getLikersOfPost(ownerID = ID, itemIDs = strOfIDs, v = 5.74, timeout = 120)
 			req()
 			strOfIDs = ''
 			for lst in request:
@@ -290,7 +320,7 @@ def getRepostsOfPost (ID, listOfPosts):
 		if ((i + 1) % 25) and (i != (len(listOfPosts) - 1)):
 			strOfIDs += ','
 		if (not (i + 1) % 25) or (i == (len(listOfPosts) - 1)):
-			request = api.execute.getRepostersOfPost(ownerID = ID, itemIDs = strOfIDs, v = 5.74, timeout = 30)
+			request = api.execute.getRepostersOfPost(ownerID = ID, itemIDs = strOfIDs, v = 5.74, timeout = 120)
 			req()
 			strOfIDs = ''
 			for lst in request:
@@ -316,12 +346,14 @@ def countOfLikesAndReposts (userID, ListOfLikers, listOfReposters):
 	response = {'likes' : likes, 'reposts' : reposts}
 	return response
 
-def countOfFriendsInGroups (groupsOfFriends, friendsOfUser):
+def FindFriendsInGroups (userID, groupsOfFriends, friendsOfUser):
 	global globalIDForFindUsersList, officialGroups
 	saveThis = globalIDForFindUsersList
 
 	count = {'теле2' : 0, 'мтс' : 0, 'мегафон' : 0, 'билайн' : 0}
+	lstOfFriendsInGroup = []
 	for i in range(1, len(friendsOfUser)):
+		lstOfGroupsOfUser = []
 		globalIDForFindUsersList = friendsOfUser[i]
 		groupsOfFriend = list(filter(findUsersList, groupsOfFriends))
 		if len(groupsOfFriend) != 0:
@@ -330,9 +362,12 @@ def countOfFriendsInGroups (groupsOfFriends, friendsOfUser):
 				for offGroup in officialGroups:
 					if groupsOfFriend[j] == offGroup:
 						count[offGroup] += 1
+						lstOfGroupsOfUser.append(str(offGroup))
+		if len(lstOfGroupsOfUser) > 0:
+			lstOfFriendsInGroup.append({str(friendsOfUser[i]) : lstOfGroupsOfUser})
 
 	globalIDForFindUsersList = saveThis
-	return count
+	return {'count' : count, 'lst' : lstOfFriendsInGroup}
 
 def findUsersList(lst):
 	global globalIDForFindUsersList
@@ -351,7 +386,7 @@ def getFriendsOfUsers(listOfUsers):
 		if ((i + 1) % 25) and (i != (len(listOfUsers) - 1)):
 			strOfIDs += ','
 		if (not (i + 1) % 25) or (i == (len(listOfUsers) - 1)):
-			result = api.execute.getFriends(strOfUsers = strOfIDs, v = 5.74, timeout = 30)
+			result = api.execute.getFriends(strOfUsers = strOfIDs, v = 5.74, timeout = 120)
 			req()
 			strOfIDs = ''
 			for usersFriends in result:
@@ -363,21 +398,24 @@ def getFriendsOfUsers(listOfUsers):
 
 
 
-def main ():
-	global isSetGroupOperator, globalIDForFindUsersList
+def collectInfoFromUsers (groupID):
+	global isSetGroupOperator, globalIDForFindUsersList, officialGroups
+
+	lstOfDataOfUsers = []
+	filteredLstOfDataOfUsers = []
 
 	WriteCSVFileOfUsers('users.csv', 'Empty', True)
-	listOfMembersID = getListOfMembers('109491482')
+	WriteCSVFileOfUsers('usersProfitable.csv', 'Empty', True)
+	listOfMembersID = getListOfMembers(str(groupID))
 
-
+	print(datetime.datetime.now().strftime("%d-%m-%Y %H:%M"))
 	listOfUsers = getInfoOfUsers(listOfMembersID)
+	print(datetime.datetime.now().strftime("%d-%m-%Y %H:%M"))
 	listOdUsersGroups = getGroupsOfUsersTwo(listOfMembersID) #определение isSetGroupOperator происходит здесь
+	print(datetime.datetime.now().strftime("%d-%m-%Y %H:%M"))
 
-
-	response = getFriendsOfUsers(listOfMembersID)
-	globalFriends = response['global']
-	friendsOfUsers = response['listOfFriends']
-	groupsOfFriends = getGroupsOfUsersTwo(globalFriends)
+	print('Анализ друзей?')
+	startFriends = input()
 
 
 	if isSetGroupOperator['теле2']:
@@ -440,28 +478,170 @@ def main ():
 				if reposts:
 					DataOfUser[rOper] = reposts
 
-		saveThis = globalIDForFindUsersList
-		globalIDForFindUsersList = DataOfUser['id']
+		lstOfDataOfUsers.append(copy.deepcopy(DataOfUser))
 
-		friendsOfUser = list(filter(findUsersList, friendsOfUsers))
-		print('$$$$')
-		print(friendsOfUser)
-		print('$$$$')
-		if len(friendsOfUser) != 0:
-			response = countOfFriendsInGroups(groupsOfFriends, list(filter(findUsersList, friendsOfUsers))[0])
-			globalIDForFindUsersList = saveThis
 
-			DataOfUser['fTele2'] = response['теле2']
-			DataOfUser['fMTS'] = response['мтс']
-			DataOfUser['fMegafon'] = response['мегафон']
-			DataOfUser['fBeeline'] = response['билайн']
-		else:
-			DataOfUser['fTele2'] = 0
-			DataOfUser['fMTS'] = 0
-			DataOfUser['fMegafon'] = 0
-			DataOfUser['fBeeline'] = 0
+	if str(startFriends) == '1':
+		dictOfFriendsInGroup = {}
+		countOfUsersFriends = {}
+		lstOfOffGroups = []
+		filteredLstOfDataOfUsers = []
+		for group in officialGroups:
+			lstOfOffGroups.append(str(group))
+		setOfOffGroups = set(lstOfOffGroups)
+		lstOfAnalysisWithFriends = []
 
+		for DataOfUser in lstOfDataOfUsers:
+			setUserOper = set(list(DataOfUser['operator']))
+			setUserGroups = set(DataOfUser['groups'])
+			if (setOfOffGroups & setUserGroups) | (setOfOffGroups & setUserOper):
+				lstOfAnalysisWithFriends.append(DataOfUser['id'])
+				filteredLstOfDataOfUsers.append(copy.deepcopy(DataOfUser))
+
+
+
+		response = getFriendsOfUsers(lstOfAnalysisWithFriends)
+
+		globalFriends = response['global']
+		friendsOfUsers = response['listOfFriends']
+
+		for userFriends in friendsOfUsers:
+			countOfUsersFriends[userFriends[0]] = len(userFriends) - 1
+
+		with open('countOfUsersFriends.pickle', 'wb') as f:
+			pickle.dump(countOfUsersFriends, f)
+
+		with open('filteredLstOfDataOfUsers.pickle', 'wb') as f:
+			pickle.dump(filteredLstOfDataOfUsers, f)
+
+		groupsOfFriends = getGroupsOfUsersTwo(globalFriends)
+
+
+	for DataOfUser in filteredLstOfDataOfUsers:
+		if str(startFriends) == '1':
+			setUserOper = set(list(DataOfUser['operator']))
+			setUserGroups = set(DataOfUser['groups'])
+
+			if (setOfOffGroups & setUserGroups) | (setOfOffGroups & setUserOper):
+				saveThis = globalIDForFindUsersList
+				globalIDForFindUsersList = DataOfUser['id']
+
+				friendsOfUser = list(filter(findUsersList, friendsOfUsers))
+
+				if len(friendsOfUser) != 0:
+					response = FindFriendsInGroups(DataOfUser['id'], groupsOfFriends, list(filter(findUsersList, friendsOfUsers))[0])
+					localOper = response['count']
+					dictOfFriendsInGroup[DataOfUser['id']] = response['lst']
+					globalIDForFindUsersList = saveThis
+
+					DataOfUser['fTele2'] = localOper['теле2']
+					DataOfUser['fMTS'] = localOper['мтс']
+					DataOfUser['fMegafon'] = localOper['мегафон']
+					DataOfUser['fBeeline'] = localOper['билайн']
+
+				else:
+					DataOfUser['fTele2'] = 0
+					DataOfUser['fMTS'] = 0
+					DataOfUser['fMegafon'] = 0
+					DataOfUser['fBeeline'] = 0
+
+			else:
+				DataOfUser['fTele2'] = 0
+				DataOfUser['fMTS'] = 0
+				DataOfUser['fMegafon'] = 0
+				DataOfUser['fBeeline'] = 0
+
+	for DataOfUser in lstOfDataOfUsers:
 		WriteCSVFileOfUsers('users.csv', DataOfUser, False)
+
+	with open('dictOfFriendsInGroup.pickle', 'wb') as f:
+		pickle.dump(dictOfFriendsInGroup, f)
+
+
+
+def analysisOfPageRank(dictOfFriendsInGroup,filteredLstOfDataOfUsers,countOfUsersFriends):
+	totalCountOfFriends = 0
+	lstOfFriendsInGroup = []
+	countOfFriendsFriends = {}
+
+	for user in countOfUsersFriends:
+		totalCountOfFriends += float(countOfUsersFriends[user])
+
+	for owner in dictOfFriendsInGroup:
+		for dict in dictOfFriendsInGroup[owner]:
+			for friend in dict:
+				lstOfFriendsInGroup.append(str(friend))
+
+
+	response = getFriendsOfUsers(lstOfFriendsInGroup)
+
+	lstOfFriendsFriends = response['listOfFriends']
+
+	for friends in lstOfFriendsFriends:
+		countOfFriendsFriends[str(friends[0])] = len(friends) - 1
+		totalCountOfFriends += len(friends) - 1
+
+	writeCSVFileOfAnalysisUsers('analysUsers.csv', 'Empty', True)
+	writeCSVFileOfAnalysisFriends('analysFriends.csv', 'Empty', True)
+
+	for DataUser in filteredLstOfDataOfUsers:
+		newDataUser = {'id':'', 'groups': '', 'friends': '', 'PageRank' : ''}
+		friendInfo = {'owner' : '', 'id':'', 'groups': '', 'friends': '', 'PageRank' : ''}
+		lstOfFriends = []
+		newDataUser['id'] = DataUser['id']
+		newDataUser['groups'] = DataUser['groups']
+
+		for count in  countOfUsersFriends:
+			if str(DataUser['id']) ==  str(count):
+				newDataUser['PageRank'] = str(float(countOfUsersFriends[count])/totalCountOfFriends)
+
+		for owner in dictOfFriendsInGroup:
+			if str(owner) == str(DataUser['id']):
+				print()
+				print(dictOfFriendsInGroup[owner])
+				for dict in dictOfFriendsInGroup[owner]:
+					print(dict)
+					for friend in dict:
+						lstOfFriends.append(str(friend))
+						lstOfGroups = dict[friend]
+						friendInfo['owner'] = str(owner)
+						friendInfo['id'] = str(friend)
+						friendInfo['groups'] = lstOfGroups
+						for count in countOfFriendsFriends:
+							if str(count) == str(friend):
+								friendInfo['PageRank'] = str(float(countOfFriendsFriends[count])/totalCountOfFriends)
+						writeCSVFileOfAnalysisFriends('analysFriends.csv', friendInfo, False)
+
+		newDataUser['friends'] = lstOfFriends
+		writeCSVFileOfAnalysisUsers('analysUsers.csv', newDataUser, False)
+
+
+
+def main():
+	print('Collect info from users: y/n')
+	while True:
+		print('Press the key')
+		startCollect = str(input())
+		if startCollect == 'y' or startCollect == 'Y':
+			collectInfoFromUsers(53548055)
+			break
+		else:
+			if startCollect == 'n' or startCollect == 'N':
+				print('aaa')
+				break
+			else:
+				print('Wrong key pressed')
+
+	with open('dictOfFriendsInGroup.pickle', 'rb') as f:
+		dictOfFriendsInGroup = pickle.load(f)
+
+	with open('filteredLstOfDataOfUsers.pickle', 'rb') as f:
+		lstOfDataOfUsers = pickle.load(f)
+
+	with open('countOfUsersFriends.pickle', 'rb') as f:
+		countOfUsersFriends = pickle.load(f)
+
+	analysisOfPageRank (dictOfFriendsInGroup,lstOfDataOfUsers,countOfUsersFriends)
 
 main()
 
